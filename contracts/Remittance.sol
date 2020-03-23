@@ -1,24 +1,29 @@
 pragma solidity ^0.5.0;
 
 contract Remittance {
-  bytes32 public puzzle;
+  struct Transfer {
+    bytes32 puzzle;
+    uint value;
+  }
+  
   mapping (address => uint) public balances;
+  mapping (bytes32 => Transfer) public transfers;
   
   event LogTransactionCreated(bytes32 puzzle, uint value);
   event LogTransactionCompleted(address indexed sender);
   event LogWithdrawn(address indexed sender, uint amount);
     
-  function create(bytes32 bobPassword, bytes32 carolPassword) public payable {
+  function create(bytes32 secret) public payable {
     require(msg.value >= 1, "Send at least 1 wei to be transfered.");
-    require(bobPassword != 0, "Bob's pass can't be blank.");
-    require(carolPassword != 0, "Carol's pass can't be blank.");
-    puzzle = keccak256(abi.encodePacked(bobPassword, carolPassword));
-    emit LogTransactionCreated(puzzle, msg.value);
+    require(transfers[secret].puzzle == bytes32(0), "This puzzle is already registered.");
+    transfers[secret] = Transfer(secret, msg.value);
+    emit LogTransactionCreated(secret, msg.value);
   }
   
-  function release(bytes32 bobSecret, bytes32 carolSecret) public {
-    require(keccak256(abi.encodePacked(bobSecret, carolSecret)) == puzzle, "Invalid credentials.");
-    balances[msg.sender] += address(this).balance;
+  function release(bytes32 passA, bytes32 passB) public {
+    bytes32 hashedPuzzle = keccak256(abi.encodePacked(passA, passB));
+    require(hashedPuzzle == transfers[hashedPuzzle].puzzle, "Invalid credentials");
+    balances[msg.sender] += transfers[hashedPuzzle].value;
     emit LogTransactionCompleted(msg.sender);
   }
   
