@@ -10,7 +10,8 @@ contract('Remittance', function(accounts) {
   const passB = padRight(fromAscii("password2"), 64);
   const passC = padRight(fromAscii("password3"), 64)
   const secret = soliditySha3(passA, passB);
-  
+  const invalidAddress = "0x0000000000000000000000000000000000000000";
+
   beforeEach('deploy new instance', async () => {
     remittanceInstance = await Remittance.new({ from: alice });
   })
@@ -29,15 +30,21 @@ contract('Remittance', function(accounts) {
 
   it('should create new transfer', async () => {
     await truffleAssert.passes(
-      remittanceInstance.create(secret, { from: alice, value: 200 })
+      remittanceInstance.create(secret, carol, { from: alice, value: 200 })
     );
   })
 
   it('should fail puzzle already exists', async () => {
-    await remittanceInstance.create(secret, { from: alice, value: 200 })
-
+    await remittanceInstance.create(secret, carol, { from: alice, value: 200 })
+    
     await truffleAssert.fails(
-      remittanceInstance.create(secret, { from: alice, value: 200 })
+      remittanceInstance.create(secret, carol, { from: alice, value: 200 })
+    );
+  })
+
+  it('should fail invalid recipient address', async () => {
+    await truffleAssert.fails(
+      remittanceInstance.create(secret, invalidAddress, { from: alice, value: 200 })
     );
   })
 
@@ -45,27 +52,35 @@ contract('Remittance', function(accounts) {
     const balanceBefore = await getBalance(remittanceInstance.address);
     assert.strictEqual(balanceBefore, "0");
 
-    await remittanceInstance.create(secret, { from: alice, value: 200 });
+    await remittanceInstance.create(secret, carol, { from: alice, value: 200 });
 
     const balanceAfter = await getBalance(remittanceInstance.address);
     assert.strictEqual(balanceAfter, "200");
   })
 
   it('should emit transaction created event', async () => {
-    const response = await remittanceInstance.create(secret, { from: alice, value: 200 })
+    const response = await remittanceInstance.create(secret, carol, { from: alice, value: 200 })
     assert.strictEqual('LogTransactionCreated', response.receipt.logs[0].event);
   })
 
   it('should not release funds to invalid puzzle', async () => {
-    await remittanceInstance.create(secret, { from: alice, value: 200 })
+    await remittanceInstance.create(secret, carol, { from: alice, value: 200 })
 
     await truffleAssert.fails(
       remittanceInstance.release(passC, passB, { from: carol})
     );
   })
 
+  it('should not release funds to unauthorized account', async () => {
+    await remittanceInstance.create(secret, carol, { from: alice, value: 200 })
+
+    await truffleAssert.fails(
+      remittanceInstance.release(passC, passB, { from: bob})
+    );
+  })
+
   it('should add funds to msg.sender balance', async () => {
-    await remittanceInstance.create(secret, { from: alice, value: 100 })
+    await remittanceInstance.create(secret, carol, { from: alice, value: 100 })
     
     const carolBalance = await remittanceInstance.balances(carol);
     assert.strictEqual(carolBalance.toString(10), "0");
@@ -77,7 +92,7 @@ contract('Remittance', function(accounts) {
   })
 
   it('should emit funds released event', async () => {
-    await remittanceInstance.create(secret, { from: alice, value: 100 })
+    await remittanceInstance.create(secret, carol, { from: alice, value: 100 })
     const response = await remittanceInstance.release(passA, passB, { from: carol});
     
     assert.strictEqual(response.receipt.logs[0].event, "LogTransactionCompleted");
@@ -90,7 +105,7 @@ contract('Remittance', function(accounts) {
   })
 
   it('should withdraw released funds', async () => {
-    await remittanceInstance.create(secret, { from: alice, value: 100 })
+    await remittanceInstance.create(secret, carol, { from: alice, value: 100 })
     await remittanceInstance.release(passA, passB, { from: carol });
     
     const accountBalance = toBN(await getBalance(carol));
@@ -109,7 +124,7 @@ contract('Remittance', function(accounts) {
   })
 
   it('should emit funds withdrawn event', async () => {
-    await remittanceInstance.create(secret, { from: alice, value: 100 })
+    await remittanceInstance.create(secret, carol, { from: alice, value: 100 })
     await remittanceInstance.release(passA, passB, { from: carol });
     const response = await remittanceInstance.withdraw({ from: carol });
 
