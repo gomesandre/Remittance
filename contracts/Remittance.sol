@@ -2,32 +2,33 @@ pragma solidity ^0.5.0;
 
 contract Remittance {
   struct Transfer {
-    bytes32 puzzle;
     uint value;
-    address recipient;
   }
   
   mapping (address => uint) public balances;
   mapping (bytes32 => Transfer) public transfers;
   
-  event LogTransactionCreated(bytes32 puzzle, uint value, address indexed recipient);
+  event LogTransactionCreated(bytes32 puzzle, uint value);
   event LogTransactionCompleted(address indexed sender);
   event LogWithdrawn(address indexed sender, uint amount);
     
-  function create(bytes32 secret, address recipient) public payable {
+  function create(bytes32 puzzle) public payable {
     require(msg.value >= 1, "Send at least 1 wei to be transfered.");
-    require(transfers[secret].puzzle == bytes32(0), "This puzzle is already registered.");
-    require(recipient != address(0), "Recipient should be a valid address.");
-    transfers[secret] = Transfer(secret, msg.value, recipient);
-    emit LogTransactionCreated(secret, msg.value, recipient);
+    require(transfers[puzzle].value == uint(0), "This puzzle is already registered.");
+    transfers[puzzle] = Transfer(msg.value);
+    emit LogTransactionCreated(puzzle, msg.value);
   }
   
-  function release(bytes32 passA, bytes32 passB) public {
-    bytes32 hashedPuzzle = keccak256(abi.encodePacked(passA, passB));
-    require(hashedPuzzle == transfers[hashedPuzzle].puzzle, "Invalid credentials.");
-    require(transfers[hashedPuzzle].recipient == msg.sender, "Unauthorized account.");
+  function release(bytes32 receiverPassword, bytes32 agentPassword) public {
+    bytes32 hashedPuzzle = keccak256(abi.encodePacked(receiverPassword, agentPassword, msg.sender));
+    require(transfers[hashedPuzzle].value != uint(0), "Puzzle does not match.");
     balances[msg.sender] += transfers[hashedPuzzle].value;
     emit LogTransactionCompleted(msg.sender);
+  }
+  
+  function generatePuzzle(bytes32 receiverPassword, bytes32 agentPassword, address recipient) public view returns (bytes32) {
+    require(recipient != address(0), "'Invalid recipient.");
+    return keccak256(abi.encodePacked(receiverPassword, agentPassword, recipient));
   }
   
   function withdraw() public {
