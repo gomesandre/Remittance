@@ -19,17 +19,17 @@ contract Remittance {
     emit LogTransactionCreated(puzzle, msg.value);
   }
   
-  function release(bytes32 password, bytes32 agent) public {
-    bytes32 hashedPuzzle = keccak256(abi.encodePacked(address(this), password, agent, msg.sender));
+  function release(bytes32 password) public {
+    bytes32 hashedPuzzle = generatePuzzle(password, msg.sender);
     require(transfers[hashedPuzzle].value != uint(0), "Puzzle does not match or already released.");
     balances[msg.sender] += transfers[hashedPuzzle].value;
     transfers[hashedPuzzle].value = 0;
     emit LogTransactionCompleted(msg.sender);
   }
   
-  function generatePuzzle(bytes32 password, bytes32 agent, address shop) public view returns (bytes32) {
+  function generatePuzzle(bytes32 password, address shop) public view returns (bytes32) {
     require(shop != address(0), "Invalid recipient.");
-    return keccak256(abi.encodePacked(address(this), password, agent, shop));
+    return keccak256(abi.encodePacked(address(this), password, shop));
   }
   
   function withdraw() public {

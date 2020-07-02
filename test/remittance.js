@@ -6,10 +6,11 @@ contract('Remittance', function(accounts) {
   const { fromAscii, toBN, soliditySha3, padRight } = web3.utils; 
   const { getBalance } = web3.eth; 
   const [alice, bob, carol] = accounts;
+  
   const receiverPassword = padRight(fromAscii("password1"), 64);
-  const agentPassword = padRight(fromAscii("password2"), 64);
   const invalidPassword = padRight(fromAscii("password3"), 64);
-  const secret = soliditySha3(receiverPassword, agentPassword, carol);
+
+  const secret = soliditySha3(receiverPassword, carol);
   const invalidAddress = "0x0000000000000000000000000000000000000000";
 
   beforeEach('deploy new instance', async () => {
@@ -30,13 +31,13 @@ contract('Remittance', function(accounts) {
 
   it('should not generate a puzzle due invalid address', async () => {
     await truffleAssert.fails(
-      remittanceInstance.generatePuzzle(receiverPassword, agentPassword, invalidAddress, { from: alice })
+      remittanceInstance.generatePuzzle(receiverPassword, invalidAddress, { from: alice })
     );
   })
 
   it('should generate a puzzle using contract', async () => {
     await truffleAssert.passes(
-      remittanceInstance.generatePuzzle(receiverPassword, agentPassword, carol, { from: alice })
+      remittanceInstance.generatePuzzle(receiverPassword, carol, { from: alice })
     );
   })
 
@@ -73,7 +74,7 @@ contract('Remittance', function(accounts) {
     await remittanceInstance.create(secret, { from: alice, value: 200 })
 
     await truffleAssert.fails(
-      remittanceInstance.release(invalidPassword, agentPassword, { from: carol})
+      remittanceInstance.release(invalidPassword, { from: carol})
     );
   })
 
@@ -81,28 +82,28 @@ contract('Remittance', function(accounts) {
     await remittanceInstance.create(secret, { from: alice, value: 200 })
 
     await truffleAssert.fails(
-      remittanceInstance.release(receiverPassword, agentPassword, { from: bob})
+      remittanceInstance.release(receiverPassword, { from: bob})
     );
   })
 
   it('should add funds to msg.sender balance', async () => {
-    const hash = await remittanceInstance.generatePuzzle(receiverPassword, agentPassword, carol);
+    const hash = await remittanceInstance.generatePuzzle(receiverPassword, carol);
     await remittanceInstance.create(hash, { from: alice, value: 100 });
 
     const carolBalance = await remittanceInstance.balances(carol);
     assert.strictEqual(carolBalance.toString(10), "0");
     
-    const response = await remittanceInstance.release(receiverPassword, agentPassword, { from: carol});
+    const response = await remittanceInstance.release(receiverPassword, { from: carol});
     
     const carolBalanceAfter = await remittanceInstance.balances(carol);
     assert.strictEqual(carolBalanceAfter.toString(10), "100");
   })
 
   it('should emit funds released event', async () => {
-    const hash = await remittanceInstance.generatePuzzle(receiverPassword, agentPassword, carol);
+    const hash = await remittanceInstance.generatePuzzle(receiverPassword, carol);
     await remittanceInstance.create(hash, { from: alice, value: 100 });
 
-    const response = await remittanceInstance.release(receiverPassword, agentPassword, { from: carol});
+    const response = await remittanceInstance.release(receiverPassword, { from: carol});
     assert.strictEqual(response.receipt.logs[0].event, "LogTransactionCompleted");
   })
 
@@ -113,9 +114,9 @@ contract('Remittance', function(accounts) {
   })
 
   it('should withdraw released funds', async () => {
-    const hash = await remittanceInstance.generatePuzzle(receiverPassword, agentPassword, carol);
+    const hash = await remittanceInstance.generatePuzzle(receiverPassword, carol);
     await remittanceInstance.create(hash, { from: alice, value: 100 })
-    await remittanceInstance.release(receiverPassword, agentPassword, { from: carol });
+    await remittanceInstance.release(receiverPassword, { from: carol });
     
     const accountBalance = toBN(await getBalance(carol));
     const stateBalance = toBN(await remittanceInstance.balances(carol));
@@ -133,9 +134,9 @@ contract('Remittance', function(accounts) {
   })
 
   it('should emit funds withdrawn event', async () => {
-    const hash = await remittanceInstance.generatePuzzle(receiverPassword, agentPassword, carol);
+    const hash = await remittanceInstance.generatePuzzle(receiverPassword, carol);
     await remittanceInstance.create(hash, { from: alice, value: 100 })
-    await remittanceInstance.release(receiverPassword, agentPassword, { from: carol });
+    await remittanceInstance.release(receiverPassword, { from: carol });
     const response = await remittanceInstance.withdraw({ from: carol });
 
     assert.strictEqual(response.receipt.logs[0].event, "LogWithdrawn");
