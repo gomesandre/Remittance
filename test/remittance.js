@@ -6,10 +6,9 @@ contract('Remittance', function(accounts) {
   const { fromAscii, toBN, soliditySha3, padRight } = web3.utils; 
   const { getBalance } = web3.eth; 
   const [alice, bob, carol] = accounts;
-  
   const receiverPassword = padRight(fromAscii("password1"), 64);
   const invalidPassword = padRight(fromAscii("password3"), 64);
-
+  const expiresAfter = 24;
   const secret = soliditySha3(receiverPassword, carol);
   const invalidAddress = "0x0000000000000000000000000000000000000000";
 
@@ -43,15 +42,15 @@ contract('Remittance', function(accounts) {
 
   it('should create new transfer', async () => {
     await truffleAssert.passes(
-      remittanceInstance.create(secret, { from: alice, value: 200 })
+      remittanceInstance.create(secret, expiresAfter, { from: alice, value: 200 })
     );
   })
 
   it('should fail puzzle already exists', async () => {
-    await remittanceInstance.create(secret, { from: alice, value: 200 })
+    await remittanceInstance.create(secret, expiresAfter, { from: alice, value: 200 })
     
     await truffleAssert.fails(
-      remittanceInstance.create(secret, { from: alice, value: 200 })
+      remittanceInstance.create(secret, expiresAfter, { from: alice, value: 200 })
     );
   })
 
@@ -59,19 +58,19 @@ contract('Remittance', function(accounts) {
     const balanceBefore = await getBalance(remittanceInstance.address);
     assert.strictEqual(balanceBefore, "0");
 
-    await remittanceInstance.create(secret, { from: alice, value: 200 });
+    await remittanceInstance.create(secret, expiresAfter, { from: alice, value: 200 });
 
     const balanceAfter = await getBalance(remittanceInstance.address);
     assert.strictEqual(balanceAfter, "200");
   })
 
   it('should emit transaction created event', async () => {
-    const response = await remittanceInstance.create(secret, { from: alice, value: 200 })
+    const response = await remittanceInstance.create(secret, expiresAfter, { from: alice, value: 200 })
     assert.strictEqual('LogTransactionCreated', response.receipt.logs[0].event);
   })
 
   it('should not release funds to invalid puzzle', async () => {
-    await remittanceInstance.create(secret, { from: alice, value: 200 })
+    await remittanceInstance.create(secret, expiresAfter, { from: alice, value: 200 })
 
     await truffleAssert.fails(
       remittanceInstance.release(invalidPassword, { from: carol})
@@ -79,7 +78,7 @@ contract('Remittance', function(accounts) {
   })
 
   it('should not release funds to unauthorized account', async () => {
-    await remittanceInstance.create(secret, { from: alice, value: 200 })
+    await remittanceInstance.create(secret, expiresAfter, { from: alice, value: 200 })
 
     await truffleAssert.fails(
       remittanceInstance.release(receiverPassword, { from: bob})
@@ -88,7 +87,7 @@ contract('Remittance', function(accounts) {
 
   it('should add funds to msg.sender balance', async () => {
     const hash = await remittanceInstance.generatePuzzle(receiverPassword, carol);
-    await remittanceInstance.create(hash, { from: alice, value: 100 });
+    await remittanceInstance.create(hash, expiresAfter, { from: alice, value: 100 });
 
     const carolBalance = await remittanceInstance.balances(carol);
     assert.strictEqual(carolBalance.toString(10), "0");
@@ -101,7 +100,7 @@ contract('Remittance', function(accounts) {
 
   it('should emit funds released event', async () => {
     const hash = await remittanceInstance.generatePuzzle(receiverPassword, carol);
-    await remittanceInstance.create(hash, { from: alice, value: 100 });
+    await remittanceInstance.create(hash, expiresAfter, { from: alice, value: 100 });
 
     const response = await remittanceInstance.release(receiverPassword, { from: carol});
     assert.strictEqual(response.receipt.logs[0].event, "LogTransactionCompleted");
@@ -115,7 +114,7 @@ contract('Remittance', function(accounts) {
 
   it('should withdraw released funds', async () => {
     const hash = await remittanceInstance.generatePuzzle(receiverPassword, carol);
-    await remittanceInstance.create(hash, { from: alice, value: 100 })
+    await remittanceInstance.create(hash, expiresAfter, { from: alice, value: 100 })
     await remittanceInstance.release(receiverPassword, { from: carol });
     
     const accountBalance = toBN(await getBalance(carol));
@@ -135,7 +134,7 @@ contract('Remittance', function(accounts) {
 
   it('should emit funds withdrawn event', async () => {
     const hash = await remittanceInstance.generatePuzzle(receiverPassword, carol);
-    await remittanceInstance.create(hash, { from: alice, value: 100 })
+    await remittanceInstance.create(hash, expiresAfter, { from: alice, value: 100 })
     await remittanceInstance.release(receiverPassword, { from: carol });
     const response = await remittanceInstance.withdraw({ from: carol });
 
